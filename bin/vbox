@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+
+CMD="$1"
+VM="$2"
+
+find_vbox() {
+  if [[ -n "$VBOX" ]]; then
+    return;
+  fi
+
+  VBOX=$(command -v VBoxManage)
+  if [[ -z "$VBOX" || ! -f $VBOX ]]; then
+    VBOX="/Applications/VirtualBox.app/Contents/MacOS/VBoxManage"
+  fi
+  if [[ -z "$VBOX" || ! -f $VBOX ]]; then
+    VBOX="~/Applications/VirtualBox.app/Contents/MacOS/VBoxManage"
+  fi
+  if [[ -z "$VBOX" || ! -f $VBOX ]]; then
+    echo "Unable to find VBoxManage; make sure it's on your PATH or set the VBOX env var"
+    exit 1
+  fi
+}
+find_vbox
+
+list_vms() {
+  $VBOX list vms | awk '{print $1}' | sed 's/"//g'
+}
+
+list_ips() {
+  vm="$1"
+  $VBOX guestproperty enumerate $vm | grep IP | grep -o -w -P -e '\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}' | tr '\n' ',' | sed 's/,$//'
+}
+
+is_running() {
+  vm="$1"
+  $VBOX list runningvms | grep "\"$vm\"" >/dev/null
+  return $?
+}
+
+show_usage() {
+  echo "Usage: vbox {status|start|stop} [vm]"
+  exit 1
+}
+
+print_status() {
+  VM="$1"
+  vms=$(list_vms)
+  echo "VM Status IPs"
+  for v in $vms; do
+    if [[ -z "$VM" || "$VM" == "$v" ]]; then
+      echo -n $v
+      if is_running $v; then
+        echo -n " running "
+      else
+        echo -n " stopped "
+      fi
+      echo $(list_ips $v)
+    fi
+  done
+}
+
+do_status() {
+  print_status $1 | column -t
+}
+
+do_start() {
+  $VBOX startvm $1
+}
+
+do_stop() {
+  echo "not implemented. ssh & shutdown instead!"
+}
+
+case "$CMD" in
+  list|status)
+    do_status $VM
+    ;;
+  start)
+    do_start $VM
+    ;;
+  stop)
+    do_stop $VM
+    ;;
+  *)
+    show_usage
+    ;;
+esac
